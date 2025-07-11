@@ -1,9 +1,11 @@
 from flask import Blueprint, request, jsonify
 from app.models.database import get_products
 from app.models.ai_model import initialize_model
+from typing import List, Dict, Any
 from app.models.chat_history import save_chat_history, get_chat_history, create_chat_history_table, clear_chat_history, update_table_structure
 import uuid
 import json
+from collections.abc import Mapping
 
 # Create a Blueprint for our routes
 api = Blueprint('api', __name__)
@@ -18,7 +20,7 @@ update_table_structure()
 @api.route('/chat', methods=['POST'])
 def chat_endpoint():
     try:
-        data = request.json
+        data = request.json or {}
         user_message = data.get('message', '')
         session_id = data.get('session_id')
         
@@ -30,7 +32,7 @@ def chat_endpoint():
 
         # Get products from database
         products = get_products()
-        if products is None:
+        if not products:
             print("Error: Failed to fetch products from database")
             return jsonify({'error': 'Failed to fetch products from database'}), 500
 
@@ -39,8 +41,13 @@ def chat_endpoint():
         product_links = []
         try:
             for product in products:
+                if not isinstance(product, dict):
+                    if isinstance(product, Mapping):
+                        product = dict(product)
+                    else:
+                        keys = ['id', 'name', 'description', 'price', 'stock_quantity']
+                        product = dict(zip(keys, product))
                 product_context += f"- {product['name']}: {product['description']} (Price: ${product['price']}, Stock: {product['stock_quantity']})\n"
-                # Create product link
                 product_links.append({
                     'name': product['name'],
                     'url': f"/product_info/{product['id']}"
@@ -71,12 +78,9 @@ Instructions:
             # Generate response using Gemini
             response = chat.send_message(full_prompt)
             
-            # Determine if the response should include product links
-            # Check if the user's message contains product-related keywords
             product_keywords = ['product', 'recommend', 'suggestion', 'looking for', 'price', 'cost', 'buy', 'purchase', 'available', 'stock']
             should_include_links = any(keyword in user_message.lower() for keyword in product_keywords)
             
-            # Save chat history with product links only if relevant
             if not save_chat_history(
                 session_id=session_id,
                 user_message=user_message,
@@ -119,7 +123,7 @@ def get_history(session_id):
 @api.route('/chat/logout', methods=['POST'])
 def logout():
     try:
-        data = request.json
+        data = request.json or {}
         session_id = data.get('session_id')
         
         if not session_id:

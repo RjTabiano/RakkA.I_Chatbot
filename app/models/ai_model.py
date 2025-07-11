@@ -4,11 +4,13 @@ from app.config import Config
 def initialize_model():
     genai.configure(api_key=Config.GOOGLE_API_KEY)
     
+    generation_config = genai.GenerationConfig(**Config.GENERATION_CONFIG)
+    
     # Create the model
     model = genai.GenerativeModel(
         model_name=Config.MODEL_NAME,
         safety_settings=Config.SAFETY_SETTINGS,
-        generation_config=Config.GENERATION_CONFIG
+        generation_config=generation_config
     )
     
     system_prompt = """You are a helpful e-commerce assistant for RakkGears. Your role is to:
